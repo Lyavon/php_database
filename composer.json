@@ -1,0 +1,23 @@
+{
+  "name": "lyavon/database",
+  "version": "0.1",
+  "type": "library",
+  "description": "PDO wrapper with implicit transactions",
+  "homepage": "https://github.com/Lyavon/php_database",
+  "license": "GPL3v3",
+  "authors": [
+    {
+      "name": "Leonid Ragunovich",
+      "email": "leonid.ragunovich@mail.ru",
+      "role": "Developer"
+    }
+  ],
+  "require": {
+    "psr/log": "^3.0",
+  },
+  "autoload": {
+    "psr-4": {
+      "Lyavon\\DataBase\\": "DataBase"
+    }
+  }
+}
