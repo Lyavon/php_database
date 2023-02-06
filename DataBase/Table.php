@@ -76,6 +76,8 @@ class Table
             $name = $attr->getName();
             if (strpos($query, $name)) {
                 $values[$name] = $attr->getValue($row);
+                if ($values[$name] === '')
+                    $values[$name] = 'NULL';
             }
         }
 

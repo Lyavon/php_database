@@ -56,6 +56,11 @@ class DataBase
         $this->commit();
     }
 
+    public function abort()
+    {
+        $this->statements = [];
+    }
+
     public function prepare(...$args)
     {
         return $this->dbh->prepare(...$args);

@@ -25,7 +25,7 @@ Add the following entries to the __composer.json__:
 ### DataBase
 At the core, the __DataBase__ class lies. It is creates identically to the
 __PDO__ class and in essence extends it to retain queries until its destruction
-or explicit __commit__ call.
+or explicit __commit__ call. __abort__ can be used to forget about pending queries.
 
 The __DataBase__ class implements psr-3 __LoggerAwareTrait__.
 
@@ -43,6 +43,7 @@ $dbh->setLogger($logger);
 // Code ...
 
 $dbh->commit(); // Or commit implicitly on scope exit
+// $dbh->abort(); // In case of an error
 ```
 
 ### TableRow
@@ -139,21 +140,21 @@ $oldRow->delete();
 // will be added, and oldRow will be deleted.
 ```
 
-### AutoCommitDecorator
+### Transaction
 
 In the unlikely case of a long running PHP script or when several transactions
-are needed, __AutoCommitDecorator__ provides mechanism for running code that
+are needed, __Transaction__ provides mechanism for running code that
 generates transaction inside a callable, e.g.:
 
 ```php
 <?php
 
-use Lyavon\DataBase\AutoCommitDecorator;
+use Lyavon\DataBase\Transaction;
 
-$autoCommit = new AutoCommitDecorator($dbh); // $dbh from the previous code
-                                             // snipppets
+$trancaction = new Transaction($dbh); // $dbh from the previous code
+                                      // snipppets
 
-$setName = $autoCommit(function (string $id) {
+$setName = $transaction(function (string $id) {
     $r = MyTable::instance()->rowById($id);
     if ($r->id % 2 == 0)
         $r->name = 'even';
@@ -163,3 +164,5 @@ $setName = $autoCommit(function (string $id) {
 
 $setName('1'); // name of the record with id '1' will be 'odd' after $setName runs
 ```
+Exceptions are propagated outside the transaction, and queries will be aborted,
+not commited.
