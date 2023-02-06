@@ -23,49 +23,25 @@ class DataBase
 
     public function commit(): bool
     {
-        if (!$this->statements) {
+        if (!$this->statements)
             return true;
-        }
 
-        $rc = $this->dbh->beginTransaction();
-        if (!$rc) {
+        try {
+            $this->dbh->beginTransaction();
+            foreach ($this->statements as $statement)
+                $statement['query']->execute($statement['values']);
+        } catch (\PDOException $e) {
             $this->logger->error(
-                "Can't begin transaction",
-            );
-            return false;
-        }
-
-        foreach ($this->statements as $statement) {
-            if ($statement['query']->execute($statement['values'])) {
-                continue;
-            }
-            $this->logger->error(
-                "Can't execute ({statement}) ({error})",
+                "Error during transaction: {exception}",
                 [
-                  'statement' => $statement->queryString,
-                  'error' => print_r($statement->errorInfo(), true),
+                    'exception' => $e,
                 ],
             );
-            if (!$this->dbh->rollBack()) {
-                $this->logger->error(
-                    "Can't roll back the transaction ({error})",
-                    [
-                      'error' => $this->dbh->errorCode(),
-                    ],
-                );
-            }
+            $this->dbh->rollBack();
+            $this->statements = [];
             return false;
         }
-
-        if (!$this->dbh->commit()) {
-            $this->logger->error(
-                "Can't commit the transaction ({error})",
-                [
-                  'error' => $this->sbh->errorCode(),
-                ],
-            );
-            return false;
-        }
+        $this->dbh->commit();
         $this->statements = [];
         return true;
     }
