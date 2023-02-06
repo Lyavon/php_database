@@ -2,7 +2,8 @@
 
 This repository contains PDO wrapper with ORM-like classes designed to reduce
 code on working with databases. The latter is achieved by implicit (or
-explicit) database transaction updates and by updating
+explicit) database transaction updates and by adding pending SQL queries to
+transaction on TableRow object destruction. 
 
 ## Installation
 
@@ -138,3 +139,27 @@ $oldRow->delete();
 // will be added, and oldRow will be deleted.
 ```
 
+### AutoCommitDecorator
+
+In the unlikely case of a long running PHP script or when several transactions
+are needed, __AutoCommitDecorator__ provides mechanism for running code that
+generates transaction inside a callable, e.g.:
+
+```php
+<?php
+
+use Lyavon\DataBase\AutoCommitDecorator;
+
+$autoCommit = new AutoCommitDecorator($dbh); // $dbh from the previous code
+                                             // snipppets
+
+$setName = $autoCommit(function (string $id) {
+    $r = MyTable::instance()->rowById($id);
+    if ($r->id % 2 == 0)
+        $r->name = 'even';
+    else
+        $r->name = 'odd';
+});
+
+$setName('1'); // name of the record with id '1' will be 'odd' after $setName runs
+```
