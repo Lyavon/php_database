@@ -1,6 +1,6 @@
 {
   "name": "lyavon/database",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "library",
   "description": "PDO wrapper with implicit transactions",
   "homepage": "https://github.com/Lyavon/php_database",

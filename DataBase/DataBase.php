@@ -3,6 +3,8 @@
 namespace Lyavon\DataBase;
 
 use Psr\Log\LoggerAwareTrait;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 class DataBase
 {
@@ -15,10 +17,17 @@ class DataBase
         string $dsn,
         ?string $username = null,
         ?string $password = null,
-        ?array $options = null,
+        array $options = [],
+        LoggerInterface $logger = new NullLogger(),
     ) {
+        if (!array_key_exists(\PDO::ATTR_PERSISTENT, $options))
+            $options[\PDO::ATTR_PERSISTENT] = true;
+        $options[\PDO::NULL_NATURAL] = true;
+        $options[\PDO::CASE_NATURAL] = true;
+        $options[\PDO::ERRMODE_EXCEPTION] = true;
         $this->dbh = new \PDO($dsn, $username, $password, $options);
         $this->statements = [];
+        $this->logger = $logger;
     }
 
     public function commit(): bool

@@ -74,11 +74,8 @@ class Table
         $attrs = $reflection->getProperties(\ReflectionProperty::IS_PUBLIC);
         foreach ($attrs as $attr) {
             $name = $attr->getName();
-            if (strpos($query, $name)) {
+            if (strpos($query, $name))
                 $values[$name] = $attr->getValue($row);
-                if ($values[$name] === '')
-                    $values[$name] = 'NULL';
-            }
         }
 
         $this->_dataBaseHandler->addToTransaction(

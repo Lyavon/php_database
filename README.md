@@ -34,11 +34,18 @@ Usage example:
 <?php
 
 use Lyavon\DataBase\DataBase;
-use Lyavon\Logging\StdLogger;
+use Psr\Log\NullLogger;
 
-$logger = new StdLogger(LOG_DEBUG);
-$dbh = new DataBase('mysql:host=localhost;dbname=test', 'test', 'test');
-$dbh->setLogger($logger);
+$logger = new NullLogger();
+$dbh = new DataBase(
+    'mysql:host=localhost;dbname=test',
+    'test',
+    'test',
+    [], // optional, sane defaults are set. Can be used mostly for the
+        // persisting connections
+    $logger, // optional, setLogger can be used instead
+);
+// or $dbh->setLogger($logger);
 
 // Code ...
 
@@ -63,7 +70,7 @@ use Lyavon\DataBase\TableRow;
 class MyTableRow extends TableRow
 {
     public string $id;
-    public string $name;
+    public ?string $name = null;
 }
 ```
 
@@ -96,7 +103,7 @@ class MyTable extends Table
 
     // Other behavior, such as clean rows os select should be implemented
     // manually, e.g.:
-    public function newRow(string $id, string $name): MyTableRow
+    public function newRow(string $id, ?string $name = null): MyTableRow
     {
         $rc = new MyTableRow($this);
         $rc->id = $id;
@@ -150,9 +157,10 @@ generates transaction inside a callable, e.g.:
 <?php
 
 use Lyavon\DataBase\Transaction;
+use Psr\Log\NullLogger;
 
-$trancaction = new Transaction($dbh); // $dbh from the previous code
-                                      // snipppets
+$trancaction = new Transaction($dbh, $logger); // $dbh and $logger from the
+                                               // previous code snipppets
 
 $setName = $transaction(function (string $id) {
     $r = MyTable::instance()->rowById($id);
