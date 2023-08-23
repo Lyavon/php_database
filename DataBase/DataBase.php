@@ -195,7 +195,6 @@ class DataBase
 
     /**
      * Prepare statement.
-     * TODO: perhaps switch to direct PDO access.
      *
      * @param string $query SQL query.
      * @param array $options Arguments for the query. Optional.
