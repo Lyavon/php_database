@@ -1,6 +1,6 @@
 {
   "name": "lyavon/database",
-  "version": "0.1.4",
+  "version": "0.2",
   "type": "library",
   "description": "PDO wrapper with implicit transactions",
   "homepage": "https://github.com/Lyavon/php_database",
@@ -8,7 +8,7 @@
   "authors": [
     {
       "name": "Leonid Ragunovich",
-      "email": "leonid.ragunovich@mail.ru",
+      "email": "leonid.ragunovich@gmail.com",
       "role": "Developer"
     }
   ],

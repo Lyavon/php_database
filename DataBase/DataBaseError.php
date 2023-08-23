@@ -21,12 +21,8 @@
 namespace Lyavon\DataBase;
 
 /**
- * Action to be performed on TableRow object deletion.
+ * Exception class for the DataBase module.
  */
-enum CommitAction
+class DataBaseError extends RuntimeException
 {
-    case Ignore;
-    case Insert;
-    case Update;
-    case Delete;
 }
