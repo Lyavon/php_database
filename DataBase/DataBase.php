@@ -176,8 +176,7 @@ class DataBase
         string|\PDOStatement $statement,
         array $statementArgs = [],
         array $prepareOptions = [],
-    ): void
-    {
+    ): void {
         if (is_string($statement)) {
             $statement = $this->prepare($statement, $prepareOptions);
         }

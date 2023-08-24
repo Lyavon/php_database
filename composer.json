@@ -15,6 +15,11 @@
   "require": {
     "psr/log": "^3.0"
   },
+  "scripts": {
+    "documentation": "sh scripts/documentation.sh",
+    "show-documentation": "sh scripts/show-documentation.sh",
+    "codestyle": "sh scripts/codestyle.sh"
+  },
   "autoload": {
     "psr-4": {
       "Lyavon\\DataBase\\": "DataBase"

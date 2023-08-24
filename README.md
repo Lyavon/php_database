@@ -36,7 +36,7 @@ Add the following entries to the __composer.json__:
 
 ## DataBase
 
-__DataBase__ is a wrapped that:
+__DataBase__ is a wrapper that:
 - Automates statements preparation.
 - Automates statements aggregation into transactions.
 - Allows firing transactions both implicitly and on demand.
@@ -55,7 +55,7 @@ require __DIR__ . '/vendor/autoload.php';
 use Lyavon\DataBase\DataBase;
 
 # For output purposes. Any PSR-3 compatible logger would suffice.
-# See [php_logging](https://github.com/Lyavon/php_logging) for more info.
+# See https://github.com/Lyavon/php_logging for more info.
 use Lyavon\Logging\StdLogger;
 
 $logger = new StdLogger(LOG_ERROR); # Supress irrelevant logs.
@@ -137,7 +137,7 @@ $db->addToTransaction(
 # Implicit commit will run on $db deletion (e.g. scope exit).
 $db->commit();
 
-# obtaining PDO handler.
+# Obtaining PDO handler.
 $handler = $db->handler();
 ```
 
@@ -296,7 +296,7 @@ $t21 = TestTableRow::byId(2);
 var_dump($t21);
 ```
 
-Running script above gives the following results:
+Updated script gives the following results:
 
 ```
 Script output:
@@ -453,6 +453,28 @@ select * from test_table; -- alias is now applied.
 |  1 | alice | NULL  |
 +----+-------+-------+
 
+```
+
+## Scripts usage
+php\_database provides several scripts for convenience:
+
+```sh
+# Generate phpdoc (output is going to _documentation_ directory of project
+# root. Expects phpdoc to be installed globally).
+sh scripts/documentation.sh
+# or
+composer run-script documentation
+
+# Show documentation (opens in the default browser. Will try to run
+# _documentation_ if it has not been done yet).
+sh scripts/show-documentation.sh
+# or
+composer run-script show-documentation
+
+# Fix codestyle (Expects php-cs-fixer to be installed globally).
+sh scripts/codestyle.sh
+# or
+composer run-script codestyle
 ```
 
 # License
