@@ -23,6 +23,6 @@ namespace Lyavon\DataBase;
 /**
  * Exception class for the DataBase module.
  */
-class DataBaseError extends RuntimeException
+class DataBaseError extends \RuntimeException
 {
 }

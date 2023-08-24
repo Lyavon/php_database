@@ -27,9 +27,54 @@ use Lyavon\DataBase\CommitAction;
 use Lyavon\DataBase\DataBase;
 
 /**
- * TableRow is a class representing single row of a corresponding table.
+ * TableRow is a class that represents both single table row and the whole
+ * table.
  *
- * TODO: describe usage.
+ * TableRow strives to allow interacting with database in an ORM-like manner
+ * while retaining maximal control over database by using SQL for all the
+ * operations. By default static methods and properties regulate table behavior
+ * as a whole while instance methods affect only a single row.
+ *
+ * The typical usage of TableRow is subclassing it with providing all the
+ * necessary operations. Subclass must define the following:
+ * - Properties that will be accessed from PHP.
+ * - {@link \Lyavon\DataBase\TableRow::deleteRowQuery deleteRowQuery}.
+ * - {@link \Lyavon\DataBase\TableRow::insertRowQuery insertRowQuery}.
+ * - {@link \Lyavon\DataBase\TableRow::updateRowQuery updateRowQuery}.
+ * - {@link \Lyavon\DataBase\TableRow::migrate migrate}.
+ * - Additional functions (new object creation, required selections etc).
+ *
+ * {@link \Lyavon\DataBase\TableRow::init Initialization} have to take place on
+ * script startup.
+ *
+ * Query SQL strings are used for default delete, update and insert actions
+ * that happen on {@link \Lyavon\DataBase\TableRow::__destruct instance
+ * deletion}. A particular action is set up with the corresponding methods:
+ * - {@link \Lyavon\DataBase\TableRow::delete delete}
+ * - {@link \Lyavon\DataBase\TableRow::ignore ignore}
+ * - {@link \Lyavon\DataBase\TableRow::insert insert}
+* - {@link \Lyavon\DataBase\TableRow::update update}
+* And can be queried by {@link \Lyavon\DataBase\TableRow::action action}.
+*
+ * TableRow attempts to implement migration in IndexedDB manner, which means
+ * tracking table version (integer) and incrementing it each time change
+ * happens. Before table creation its version is null then it is expected to go
+ * from zero up to 2^16, incrementing after each change. Although programmer
+ * might implement his own integer sequence.
+ * {@link \Lyavon\DataBase\TableRow::createVersioningTable
+ * createVersioningTable}, {@link
+ * \Lyavon\DataBase\TableRow::getCurrentTableVersion getCurrentTableVersion},
+ * {@link \Lyavon\DataBase\TableRow::setCurrentTableVersion
+ * setCurrentTableVersion} are helpers for migration implementation.
+ *
+ * __N.B.! Migration helpers may not play well with DataBase transactional
+ * mechanism.__
+ *
+ * Lion share of database interactions may be done with {@link
+ * \Lyavon\DataBase\TableRow::fetchAll fetchAll} method. The rest might be done
+ * by obtaining _\\PDO_ handler from the used database.
+ *
+ * TableRow supports PSR-3 compatible logger and uses NullLogger by default.
  */
 abstract class TableRow
 {
@@ -86,44 +131,42 @@ abstract class TableRow
     }
 
     /**
-     * TableRow instance peforms database insteraction only on destruction.
+     * TableRow instance peforms database interaction only on destruction.
      */
     public function __destruct()
     {
         $query = '';
         switch ($this->action()) {
             case CommitAction::Delete:
-                $query = $this->deleteRowQuery;
+                $query = static::$deleteRowQuery;
                 break;
             case CommitAction::Update:
-                $query = $this->updateRowQuery;
+                $query = static::$updateRowQuery;
                 break;
             case CommitAction::Insert:
-                $query = $this->insertRowQuery;
+                $query = static::$insertRowQuery;
                 break;
             default:
                 return;
         }
 
         $values = [];
-        $reflection = new \ReflectionClass(static);
+        $reflection = new \ReflectionClass(get_called_class());
         $attrs = $reflection->getProperties(\ReflectionProperty::IS_PUBLIC);
         foreach ($attrs as $attr) {
             $name = $attr->getName();
             if (strpos($query, $name)) {
-                $values[$name] = $attr->getValue($row);
+                $values[$name] = $attr->getValue($this);
             }
         }
 
         try {
             static::$dataBase->addToTransaction(
-                [
-                'query' => $this->_dataBase->prepare($query),
-                'values' => $values,
-                ],
+                $query,
+                $values,
             );
         } catch (\Throwable $th) {
-            $this->logger->error(
+            static::$logger->error(
                 "Can't prepare query ({query}) with ({values}): {throwable}",
                 [
                     'query' => $query,
@@ -134,29 +177,26 @@ abstract class TableRow
         }
     }
 
-
     /**
-     * @var ?DataBase $dataBase Database associated with TableRow.
+     * @var DataBase $dataBase Database associated with TableRow.
      */
-    protected static ?DataBase $dataBase = null;
-
+    protected static DataBase $dataBase;
     /**
      * @var LoggerInterface $logger Logger associated with TableRow. NullLogger by default.
      */
-    protected static LoggerInterface $logger = new NullLogger();
+    protected static LoggerInterface $logger;
 
     /**
      * Initialize the TableRow subclass.
      *
-     * @param DataBase $database DataBase to be used.
+     * @param DataBase $dataBase DataBase to be used.
      * @param LoggerInterface $logger Logger to be used. NullLogger by default.
      *
      */
-    public static function init(DataBase $database, ?LoggerInterface $logger): void
+    public static function init(DataBase $dataBase, LoggerInterface $logger = new NullLogger()): void
     {
-        static::$database = $database;
-        if ($logger)
-            static::$logger = $logger;
+        static::$dataBase = $dataBase;
+        static::$logger = $logger;
     }
 
     /**
@@ -175,31 +215,47 @@ abstract class TableRow
     /**
      * Fetch all suitable rows according to query parameters.
      *
-     * @param string $query
-     * @param array $parameters
-     * @param string $class
-     * @param array $classArgs
+     * @param string|\PDOStatement $statement Prepared or unprepared statement
+     * for fetch.
+     * @param array $statementArgs Arguments for sustitution for the statement.
+     * Empty array by default.
+     * @param array $prepareOptions Options for preparation in case of
+     * unprepared statement. Empty array by default.
+     * @param int $mode Fetch mode. \PDO::FETCH_CLASS by default. Supports only
+     * FETCH_CLASS and FETCH_DEFAULT.
+     * @param ?string $class Class for fetched result. get_called_class() by
+     * default.
+     * @param ?array $classArgs Arguments for the result class instantiation.
+     * Empty array by default.
      * @return array
      * @throws DataBaseError on any error occured during database interaction.
      */
     public static function fetchAll(
-        string $query,
-        array $parameters,
-        string $class,
-        array $classArgs,
+        string|\PDOStatement $statement,
+        array $statementArgs = [],
+        array $prepareOptions = [],
+        int $mode = \PDO::FETCH_CLASS,
+        ?string $class = null,
+        ?array $classArgs = [],
     ): array {
         try {
-            $cursor = static::$dataBase->prepare($query);
-            $cursor->execute($parameters);
-            $rc = $cursor->fetchAll(\PDO::FETCH_CLASS, $class, $classArgs);
-            $cursor->closeCursor();
-            return $rc;
+            $class ??= get_called_class();
+            if (is_string($statement)) {
+                $statement = static::$dataBase->prepare($statement, $prepareOptions);
+            }
+            $statement->execute($statementArgs);
+            $result = $mode == \PDO::FETCH_CLASS
+                ? $statement->fetchAll(\PDO::FETCH_CLASS, $class, $classArgs)
+                : $statement->fetchAll(\PDO::FETCH_DEFAULT)
+            ;
+            $statement->closeCursor();
+            return $result;
         } catch (\Throwable $th) {
-            $this->logger->error(
-                "Can't fetch ({query}) with ({parameters}): {throwable}",
+            static::$logger->error(
+                "Can't fetch ({statement}) with ({statementArgs}): {throwable}",
                 [
-                    'query' => $query,
-                    'parameters' => $parameters,
+                    'statement' => $statement,
+                    'statementArgs' => $statementArgs,
                     'throwable' => $th,
                 ],
             );
@@ -210,21 +266,24 @@ abstract class TableRow
     /**
      * Create versioning table for all the tables for the database.
      *
+     * N.B.! This operation breaks DataBase transaction.
+     *
      * @return void
      * @throws DataBaseError on error during table creaction.
      */
-    protected static function createVersioningTable(): void {
+    protected static function createVersioningTable(): void
+    {
         try {
-            $cursor = static::$dataBase->prepare('
-                CREATE TABLE IF NOT EXISTS
-                    tables_versions
-                (
-                    name TINYTEXT PRIMARY KEY,
-                    version SMALLINT UNSIGNED DEFAULT 0
-                )
-            ');
-            $cursor->execute();
-            $cursor->closeCursor();
+            $cursor = static::$dataBase->addToTransaction(
+                '
+                    CREATE TABLE IF NOT EXISTS
+                        tables_versions
+                    (
+                        name VARCHAR(255) PRIMARY KEY,
+                        version SMALLINT UNSIGNED DEFAULT 0
+                    )
+                ',
+            );
         } catch (\Throwable $th) {
             static::$logger->alert(
                 "Can't create versioning table: {reason}",
@@ -243,23 +302,29 @@ abstract class TableRow
      * @return int|null
      * @throws DataBaseError on error during database transaction.
      */
-    protected static function getCurrentTableVersion(string $tableName): int|null {
-        try{
-            $cursor = static::$database->prepare('
-                SELECT
-                    version 
-                FROM
-                    tables_versions
-                WHERE
-                    name = :name
-            ');
-            $cursor->execute([
-                'name' => $tableName,
-            ]);
-            $result = $cursor->fetchAll();
-            return $result ? $result[0]['version']: null;
+    protected static function getCurrentTableVersion(string $tableName): int|null
+    {
+        try {
+            static::$dataBase->commit();
+            $version = static::fetchAll(
+                '
+                    SELECT
+                        version
+                    FROM
+                        tables_versions
+                    WHERE
+                        name = :name
+                ',
+                [
+                    'name' => $tableName,
+                ],
+                [
+                ],
+                \PDO::FETCH_DEFAULT,
+            );
+            return $version ? $version[0]['version'] : null;
         } catch (\Throwable $th) {
-            static::$database->alert(
+            static::$logger->alert(
                 "Can't fetch table version for {name}: {cause}",
                 [
                     'name' => $tableName,
@@ -273,38 +338,42 @@ abstract class TableRow
     /**
      * Set current version for the table.
      *
+     * N.B.! Change is not applied until commit happens.
+     *
      * @param string $tableName Name of the table.
      * @param int $version Tables's actual version.
      * @return void
      * @throws DataBaseError on error during database transaction.
      */
-    protected static function setCurrentTableVerstion(string $tableName, int $version): void {
+    protected static function setCurrentTableVersion(string $tableName, int $version): void
+    {
         try {
-            $cursor = static::$database->prepare('
-                INSERT INTO
-                    tables_versions
-                (
-                    name,
-                    version
-                )
-                VALUES
-                (
-                    :name,
-                    :version
-                )
-                ON
-                    DUPLICATE KEY
-                UPDATE
-                    version = :version
-            ');
-            $cursor->execute([
-                'name' => $tableName,
-                'version' => $version,
-            ]);
-            $result = $cursor->fetchAll();
+            static::$dataBase->addToTransaction(
+                '
+                    INSERT INTO
+                        tables_versions
+                    (
+                        name,
+                        version
+                    )
+                    VALUES
+                    (
+                        :name,
+                        :version
+                    )
+                    ON
+                        DUPLICATE KEY
+                    UPDATE
+                        version = :version
+                ',
+                [
+                    'name' => $tableName,
+                    'version' => $version,
+                ]
+            );
         } catch (\Throwable $th) {
-            static::$database->alert(
-                "Can't set table version for {name} ({version}): {cause}",
+            static::$logger->alert(
+                "Can't create transaction to set table {name} version to {version}: {cause}",
                 [
                     'name' => $tableName,
                     'version' => $version,

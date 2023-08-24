@@ -28,7 +28,38 @@ use Lyavon\DataBase\DataBaseError;
 
 /**
  * DataBase class is a wrapper around PDO extension that simplifies usage of
- * the latter in transactional manner.
+ * the latter, especially in a transactional manner.
+ *
+ * Simplification involves _\\PDO_ initialization, conversion of SQL query
+ * string into _\\PDOStatement_, and aggregation of statements in order to run
+ * them as a transaction. The rest of PDO functionality is available through
+ * {@link \Lyavon\DataBase\DataBase::handler _\\PDO_}.
+ *
+ * DataBase initialization sets the following options to true:
+ * - _\\PDO::ATTR_PERSISTENT_ (by default)
+ * - _\\PDO::NULL_NATURAL_ (always)
+ * - _\\PDO::CASE_NATURAL_ (always)
+ * - _\\PDO::ERRMODE_EXCEPTION_ (always)
+ * Safe DSN, username and password obtainment is still up to the programmer.
+ *
+ * {@link \Lyavon\DataBase\DataBase::addToTransaction Adding to transaction}
+ * may be done in two forms: prepared or unprepared statements. In case of
+ * unprepared statement preparation is made on the fly which simplifies code.
+ * On the other hand, {@link \Lyavon\DataBase\DataBase::prepare preparation}
+ * alongside with caching the statement might allow to skip this operation in
+ * case of a long running script.
+ *
+ * All the statements are eventually get aggregated into _$statements_ array
+ * via _addToTransaction_. After that transaction may either be {@link
+ * \Lyavon\DataBase\DataBase::abort aborted on user demand}, {@link
+ * \Lyavon\DataBase\DataBase::commit commited explicitly}, or {@link
+ * \Lyavon\DataBase\DataBase::__destruct commited implicitly on scope exit}.
+ *
+ * __N.B.! Some statements might be implicitly autocommited (such as creating
+ * or dropping tables). Therefore it's better to commit them separated from the
+ * rest of the transaction.__
+ *
+ * DataBase supports PSR-3 compatible loggers. _NullLogger_ is used by default.
  */
 class DataBase
 {
@@ -66,9 +97,6 @@ class DataBase
         LoggerInterface $logger = new NullLogger(),
     ) {
         try {
-            $dsn ??= getenv('DB_DSN');
-            $username ??= getenv('DB_USERNAME');
-            $password ??= getenv('DB_PASSWORD');
             if (!array_key_exists(\PDO::ATTR_PERSISTENT, $options)) {
                 $options[\PDO::ATTR_PERSISTENT] = true;
             }
@@ -78,7 +106,7 @@ class DataBase
             $this->dbh = new \PDO($dsn, $username, $password, $options);
             $this->statements = [];
             $this->logger = $logger;
-            $this->logger->info(
+            $this->logger->debug(
                 "<{id}> Connect to {dsn} with {username} ({password}). Used options: {options}",
                 [
                     'id' => spl_object_id($this->dbh),
@@ -104,19 +132,65 @@ class DataBase
     }
 
     /**
-     * Add the prepared statement to other pending statements.
+     * Prepare statement.
      *
-     * @param array $bindedStatement Statement to add.
-     * @return void
+     * @param string $query SQL query.
+     * @param array $options Arguments for the query. Optional.
+     * @return \PDOStatement
+     * @throws DataBaseError on invalid arguments provided.
      */
-    public function addToTransaction(array $bindedStatement): void
+    public function prepare(string $query, array $options = []): \PDOStatement
     {
-        $this->statements[] = $bindedStatement;
-        $this->logger->info(
+        try {
+            return $this->dbh->prepare($query, $options);
+        } catch (\Throwable $th) {
+            $this->logger->error(
+                "<{id}> Error during preparation of ({query}) ({options}): {throwable}",
+                [
+                    'id' => spl_object_id($this->dbh),
+                    'query' => $query,
+                    'options' => $options,
+                    'throwable' => $th
+                ],
+            );
+            throw new DataBaseError("Can't prepare query", 0, $th);
+        }
+    }
+
+    /**
+     * Add new statement to pending transaction.
+     *
+     * Statement might be either prepared or not. In case of prepared
+     * statement, $prepareOptions will be ignored.
+     *
+     * @param string|\PDOStatement $statement Prepared or unprepared statement
+     * for transaction.
+     * @param array $statementArgs Arguments for sustitution for the statement.
+     * Empty array by default.
+     * @param array $prepareOptions Options for preparation in case of
+     * unprepared statement. Empty array by default.
+     * @return void
+     * @throws DataBaseError on error during preparation.
+     */
+    public function addToTransaction(
+        string|\PDOStatement $statement,
+        array $statementArgs = [],
+        array $prepareOptions = [],
+    ): void
+    {
+        if (is_string($statement)) {
+            $statement = $this->prepare($statement, $prepareOptions);
+        }
+        $statement = [
+            'query' => $statement,
+            'values' => $statementArgs,
+        ];
+        $this->statements[] = $statement;
+        $this->logger->debug(
             "<{id}> Add to DataBase transaction: {statement}",
             [
                 'id' => spl_object_id($this->dbh),
-                'statement' => $bindedStatement,
+                'statement' => $statement,
             ],
         );
     }
@@ -129,7 +203,7 @@ class DataBase
     public function abort(): void
     {
         $this->statements = [];
-        $this->logger->info(
+        $this->logger->debug(
             "<{id}> Abort DataBase transaction",
             [
                 'id' => spl_object_id($this->dbh),
@@ -138,14 +212,19 @@ class DataBase
     }
 
     /**
-     * Run pending prepared statements in a transaction.
+     * Execute pending statements in a transaction.
+     *
+     * N.B.! Some statements might be implicitly autocommited (such as creating
+     * or dropping tables). Therefore it's better to commit them separated from
+     * the rest of the transaction.
+     *
      * @return void
      * @throws DataBaseError on error during transaction.
      */
     public function commit(): void
     {
         if (!$this->statements) {
-            $this->logger->info(
+            $this->logger->debug(
                 "<{id}> Empty DataBase transaction commit",
                 [
                     'id' => spl_object_id($this->dbh),
@@ -159,8 +238,11 @@ class DataBase
             foreach ($this->statements as $statement) {
                 $statement['query']->execute($statement['values']);
             }
-            $this->dbh->commit();
-            $this->logger->info(
+            // Some statements might autocommit implicitly.
+            if ($this->dbh->inTransaction()) {
+                $this->dbh->commit();
+            }
+            $this->logger->debug(
                 "<{id}> Successful DataBase transaction commit",
                 [
                     'id' => spl_object_id($this->dbh),
@@ -175,7 +257,10 @@ class DataBase
                     'statement' => $statement,
                 ],
             );
-            $this->dbh->rollBack();
+            // Some statements might autocommit implicitly.
+            if ($this->dbh->inTransaction()) {
+                $this->dbh->rollBack();
+            }
             $this->statements = [];
             throw new DataBaseError("Error during Database transaction", 0, $e);
         }
@@ -190,32 +275,6 @@ class DataBase
         try {
             $this->commit();
         } catch (DataBaseError) {
-        }
-    }
-
-    /**
-     * Prepare statement.
-     *
-     * @param string $query SQL query.
-     * @param array $options Arguments for the query. Optional.
-     * @return \PDOStatement
-     * @throws DataBaseError on invalid arguments provided.
-     */
-    public function prepare(string $query, array $options = []): \PDOStatement
-    {
-        try {
-            return $this->dbh->prepare(...$args);
-        } catch (\Throwable $th) {
-            $this->logger->error(
-                "<{id}> Error during preparation of ({query}) ({options}): {throwable}",
-                [
-                    'id' => spl_object_id($this->dbh),
-                    'query' => $query,
-                    'options' => $options,
-                    'throwable' => $th
-                ],
-            );
-            throw new DataBaseError("Can't prepare query", 0, $th);
         }
     }
 
