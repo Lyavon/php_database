@@ -33,7 +33,7 @@ use Lyavon\DataBase\DataBaseError;
  * Simplification involves _\\PDO_ initialization, conversion of SQL query
  * string into _\\PDOStatement_, and aggregation of statements in order to run
  * them as a transaction. The rest of PDO functionality is available through
- * {@link \Lyavon\DataBase\DataBase::handler _\\PDO_}.
+ * {@see \Lyavon\DataBase\DataBase::handler() _\\PDO_}.
  *
  * DataBase initialization sets the following options to true:
  * - _\\PDO::ATTR_PERSISTENT_ (by default)
@@ -42,18 +42,18 @@ use Lyavon\DataBase\DataBaseError;
  * - _\\PDO::ERRMODE_EXCEPTION_ (always)
  * Safe DSN, username and password obtainment is still up to the programmer.
  *
- * {@link \Lyavon\DataBase\DataBase::addToTransaction Adding to transaction}
+ * {@see \Lyavon\DataBase\DataBase::addToTransaction() Adding to transaction}
  * may be done in two forms: prepared or unprepared statements. In case of
  * unprepared statement preparation is made on the fly which simplifies code.
- * On the other hand, {@link \Lyavon\DataBase\DataBase::prepare preparation}
+ * On the other hand, {@see \Lyavon\DataBase\DataBase::prepare() preparation}
  * alongside with caching the statement might allow to skip this operation in
  * case of a long running script.
  *
  * All the statements are eventually get aggregated into _$statements_ array
- * via _addToTransaction_. After that transaction may either be {@link
- * \Lyavon\DataBase\DataBase::abort aborted on user demand}, {@link
- * \Lyavon\DataBase\DataBase::commit commited explicitly}, or {@link
- * \Lyavon\DataBase\DataBase::__destruct commited implicitly on scope exit}.
+ * via _addToTransaction_. After that transaction may either be {@see
+ * \Lyavon\DataBase\DataBase::abort() aborted on user demand}, {@see
+ * \Lyavon\DataBase\DataBase::commit() commited explicitly}, or {@see
+ * \Lyavon\DataBase\DataBase::__destruct() commited implicitly on scope exit}.
  *
  * __N.B.! Some statements might be implicitly autocommited (such as creating
  * or dropping tables). Therefore it's better to commit them separated from the
@@ -136,7 +136,7 @@ class DataBase
      *
      * @param string $query SQL query.
      * @param array $options Arguments for the query. Optional.
-     * @return \PDOStatement
+     * @return \PDOStatement Unbinded statement on successful preparation.
      * @throws DataBaseError on invalid arguments provided.
      */
     public function prepare(string $query, array $options = []): \PDOStatement
@@ -169,7 +169,6 @@ class DataBase
      * Empty array by default.
      * @param array $prepareOptions Options for preparation in case of
      * unprepared statement. Empty array by default.
-     * @return void
      * @throws DataBaseError on error during preparation.
      */
     public function addToTransaction(
@@ -196,8 +195,6 @@ class DataBase
 
     /**
      * Abort the transaction by removing all the pending statements.
-     *
-     * @return void
      */
     public function abort(): void
     {
@@ -213,11 +210,10 @@ class DataBase
     /**
      * Execute pending statements in a transaction.
      *
-     * N.B.! Some statements might be implicitly autocommited (such as creating
+     * __N.B.! Some statements might be implicitly autocommited (such as creating
      * or dropping tables). Therefore it's better to commit them separated from
-     * the rest of the transaction.
+     * the rest of the transaction.__
      *
-     * @return void
      * @throws DataBaseError on error during transaction.
      */
     public function commit(): void
@@ -280,7 +276,7 @@ class DataBase
     /**
      * Obtain underlying PDO handler.
      *
-     * @return \PDO
+     * @return \PDO Underlying handler.
      */
     public function handler(): \PDO
     {

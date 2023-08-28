@@ -38,40 +38,40 @@ use Lyavon\DataBase\DataBase;
  * The typical usage of TableRow is subclassing it with providing all the
  * necessary operations. Subclass must define the following:
  * - Properties that will be accessed from PHP.
- * - {@link \Lyavon\DataBase\TableRow::deleteRowQuery deleteRowQuery}.
- * - {@link \Lyavon\DataBase\TableRow::insertRowQuery insertRowQuery}.
- * - {@link \Lyavon\DataBase\TableRow::updateRowQuery updateRowQuery}.
- * - {@link \Lyavon\DataBase\TableRow::migrate migrate}.
+ * - {@see \Lyavon\DataBase\TableRow::$deleteRowQuery deleteRowQuery}.
+ * - {@see \Lyavon\DataBase\TableRow::$insertRowQuery insertRowQuery}.
+ * - {@see \Lyavon\DataBase\TableRow::$updateRowQuery updateRowQuery}.
+ * - {@see \Lyavon\DataBase\TableRow::migrate() migrate}.
  * - Additional functions (new object creation, required selections etc).
  *
- * {@link \Lyavon\DataBase\TableRow::init Initialization} have to take place on
+ * {@see \Lyavon\DataBase\TableRow::init() Initialization} have to take place on
  * script startup.
  *
  * Query SQL strings are used for default delete, update and insert actions
- * that happen on {@link \Lyavon\DataBase\TableRow::__destruct instance
+ * that happen on {@see \Lyavon\DataBase\TableRow::__destruct() instance
  * deletion}. A particular action is set up with the corresponding methods:
- * - {@link \Lyavon\DataBase\TableRow::delete delete}
- * - {@link \Lyavon\DataBase\TableRow::ignore ignore}
- * - {@link \Lyavon\DataBase\TableRow::insert insert}
-* - {@link \Lyavon\DataBase\TableRow::update update}
-* And can be queried by {@link \Lyavon\DataBase\TableRow::action action}.
-*
+ * - {@see \Lyavon\DataBase\TableRow::delete() delete}
+ * - {@see \Lyavon\DataBase\TableRow::ignore() ignore}
+ * - {@see \Lyavon\DataBase\TableRow::insert() insert}
+ * - {@see \Lyavon\DataBase\TableRow::update() update}
+ * - And can be queried by {@see \Lyavon\DataBase\TableRow::action() action}.
+ *
  * TableRow attempts to implement migration in IndexedDB manner, which means
  * tracking table version (integer) and incrementing it each time change
  * happens. Before table creation its version is null then it is expected to go
  * from zero up to 2^16, incrementing after each change. Although programmer
  * might implement his own integer sequence.
- * {@link \Lyavon\DataBase\TableRow::createVersioningTable
- * createVersioningTable}, {@link
- * \Lyavon\DataBase\TableRow::getCurrentTableVersion getCurrentTableVersion},
- * {@link \Lyavon\DataBase\TableRow::setCurrentTableVersion
+ * {@see \Lyavon\DataBase\TableRow::createVersioningTable()
+ * createVersioningTable}, {@see
+ * \Lyavon\DataBase\TableRow::getCurrentTableVersion() getCurrentTableVersion},
+ * {@see \Lyavon\DataBase\TableRow::setCurrentTableVersion()
  * setCurrentTableVersion} are helpers for migration implementation.
  *
  * __N.B.! Migration helpers may not play well with DataBase transactional
  * mechanism.__
  *
- * Lion share of database interactions may be done with {@link
- * \Lyavon\DataBase\TableRow::fetchAll fetchAll} method. The rest might be done
+ * Lion share of database interactions may be done with {@see
+ * \Lyavon\DataBase\TableRow::fetchAll() fetchAll} method. The rest might be done
  * by obtaining _\\PDO_ handler from the used database.
  *
  * TableRow supports PSR-3 compatible logger and uses NullLogger by default.
@@ -86,7 +86,6 @@ abstract class TableRow
 
     /**
      * Set commit action to ignore.
-     * @return void
      */
     public function ignore(): void
     {
@@ -95,7 +94,6 @@ abstract class TableRow
 
     /**
      * Set commit action to insert.
-     * @return void
      */
     public function insert(): void
     {
@@ -104,7 +102,6 @@ abstract class TableRow
 
     /**
      * Set commit action to update.
-     * @return void
      */
     public function update(): void
     {
@@ -113,7 +110,6 @@ abstract class TableRow
 
     /**
      * Set commit action to delete.
-     * @return void
      */
     public function delete(): void
     {
@@ -123,7 +119,7 @@ abstract class TableRow
     /**
      * Get current commit action for the TableRow.
      *
-     * @return CommitAction
+     * @return CommitAction Current action that is set for a row.
      */
     public function action(): CommitAction
     {
@@ -227,7 +223,8 @@ abstract class TableRow
      * default.
      * @param ?array $classArgs Arguments for the result class instantiation.
      * Empty array by default.
-     * @return array
+     * @return array Array of fetched entries for a given query depending on
+     * the provided _$mode_.
      * @throws DataBaseError on any error occured during database interaction.
      */
     public static function fetchAll(
@@ -266,9 +263,8 @@ abstract class TableRow
     /**
      * Create versioning table for all the tables for the database.
      *
-     * N.B.! This operation breaks DataBase transaction.
+     * __N.B.! This operation breaks DataBase transaction.__
      *
-     * @return void
      * @throws DataBaseError on error during table creaction.
      */
     protected static function createVersioningTable(): void
@@ -299,7 +295,8 @@ abstract class TableRow
      * Obtain current version for the table.
      *
      * @param string $tableName Name of the table.
-     * @return int|null
+     * @return int|null Table's version inside the database or null if it
+     * doesn't exist yet.
      * @throws DataBaseError on error during database transaction.
      */
     protected static function getCurrentTableVersion(string $tableName): int|null
@@ -338,11 +335,10 @@ abstract class TableRow
     /**
      * Set current version for the table.
      *
-     * N.B.! Change is not applied until commit happens.
+     * __N.B.! Change is not applied until commit happens.__
      *
      * @param string $tableName Name of the table.
      * @param int $version Tables's actual version.
-     * @return void
      * @throws DataBaseError on error during database transaction.
      */
     protected static function setCurrentTableVersion(string $tableName, int $version): void
